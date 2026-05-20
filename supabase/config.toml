@@ -40,3 +40,20 @@ entrypoint = "./functions/whatsapp-dispatcher/index.ts"
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/mcp/index.ts"
+
+[auth]
+# Base URL of the SPA; used as allow-list for OAuth `redirectTo` after Google returns to Supabase.
+site_url = "https://acrm-app.tika-ai.com"
+additional_redirect_urls = [
+  "https://acrm-app.tika-ai.com",
+  "https://acrm-app.tika-ai.com/**",
+]
+
+[auth.external.google]
+enabled = true
+client_id = "146242832612-9l2ctjc28es5i8fll3qqfrqp0h0ukfn9.apps.googleusercontent.com"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET)"
+# Must match an "Authorized redirect URI" in Google Cloud (OAuth client). Tells Google where to send the user after consent.
+redirect_uri = "https://ndxlahgkhrabfnugrxtp.supabase.co/auth/v1/callback"
+# Local Google sign-in often fails nonce validation unless skipped.
+skip_nonce_check = true
