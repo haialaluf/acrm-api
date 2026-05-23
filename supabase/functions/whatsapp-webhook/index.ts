@@ -30,6 +30,55 @@ const DEFAULT_ACCESS_TOKEN = Deno.env.get("META_SYSTEM_USER_ACCESS_TOKEN") ||
   "";
 
 /**
+ * Opt-out: a contact can remove themselves by replying with exactly "הסר" or
+ * "remove" (trimmed, case-insensitive). The matched language drives the
+ * confirmation reply below.
+ */
+const OPT_OUT_KEYWORDS: Record<string, "he" | "en"> = {
+  "הסר": "he",
+  "remove": "en",
+};
+
+const OPT_OUT_CONFIRMATIONS: Record<"he" | "en", string> = {
+  he: "בוצע, הוסרת מרשימת הקשר.",
+  en: "Done, you have been removed from our contacts.",
+};
+
+/** Matched language if `text` is an opt-out keyword, else undefined. */
+function detectOptOutLanguage(text: string): "he" | "en" | undefined {
+  return OPT_OUT_KEYWORDS[text.trim().toLowerCase()];
+}
+
+/**
+ * Soft opt-out: mark the contact address (and its linked contact, if any) as
+ * 'removed'. History is preserved; the agent is suppressed via the
+ * contact-status gate in agent-client and the non-pending status set on the
+ * opt-out message itself.
+ */
+async function removeContact(
+  client: SupabaseClient<Database>,
+  organization_id: string,
+  address: string,
+): Promise<void> {
+  const { data } = await client
+    .from("contacts_addresses")
+    .update({ status: "removed" })
+    .eq("organization_id", organization_id)
+    .eq("address", address)
+    .select("contact_id")
+    .maybeSingle()
+    .throwOnError();
+
+  if (data?.contact_id) {
+    await client
+      .from("contacts")
+      .update({ status: "removed" })
+      .eq("id", data.contact_id)
+      .throwOnError();
+  }
+}
+
+/**
  * Queries the database for organization addresses and returns a map.
  * Fetches first active address per address value (ordered by created_at desc).
  */
@@ -513,6 +562,12 @@ async function processMessage(request: Request): Promise<Response> {
   const messages: MessageInsert[] = [];
   const statuses: MessageInsert[] = [];
   const contacts_addresses: ContactAddressInsert[] = [];
+  const optOuts: Array<{
+    organization_id: string;
+    organization_address: string;
+    contact_address: string;
+    language: "he" | "en";
+  }> = [];
 
   for (const entry of payload.entry) {
     const _waba_id = entry.id; // WhatsApp business account ID (WABA ID)
@@ -623,6 +678,17 @@ async function processMessage(request: Request): Promise<Response> {
             continue;
           }
 
+          // Detect opt-out only on real-time text messages (not history sync).
+          let optOutLanguage: "he" | "en" | undefined;
+
+          if (
+            field === "messages" &&
+            content.type === "text" &&
+            content.kind === "text"
+          ) {
+            optOutLanguage = detectOptOutLanguage(content.text);
+          }
+
           const message = {
             organization_id,
             // id is the internal (aka surrogate) identifier given by the DB, while
@@ -634,9 +700,24 @@ async function processMessage(request: Request): Promise<Response> {
             direction: "incoming" as const,
             content,
             timestamp: new Date(webhookMessage.timestamp * 1000).toISOString(),
+            // Opt-out messages must not reach the agent: a non-pending status
+            // keeps handle_incoming_message_to_agent from firing. Normal
+            // messages pass undefined, so the DB applies its 'pending' default.
+            status: optOutLanguage
+              ? { read: new Date().toISOString() }
+              : undefined,
           };
 
           messages.push(message);
+
+          if (optOutLanguage) {
+            optOuts.push({
+              organization_id,
+              organization_address,
+              contact_address,
+              language: optOutLanguage,
+            });
+          }
         }
       }
 
@@ -1037,6 +1118,62 @@ async function processMessage(request: Request): Promise<Response> {
       statuses: statuses.length,
       messages: patchedMessages.length,
     });
+  }
+
+  // Process opt-outs after messages are persisted so the contact address and
+  // conversation already exist (created by message-insert triggers).
+  if (optOuts.length > 0) {
+    // Deduplicate: a contact may send the keyword twice within one payload.
+    const dedupedOptOuts = Array.from(
+      new Map(
+        optOuts.map((o) => [`${o.organization_id}|${o.contact_address}`, o]),
+      ).values(),
+    );
+
+    for (const optOut of dedupedOptOuts) {
+      try {
+        await removeContact(
+          client,
+          optOut.organization_id,
+          optOut.contact_address,
+        );
+
+        // Confirm the removal. Inserted as a (default) pending outgoing message
+        // so the dispatcher delivers it; the 24h service window is open since
+        // the contact just messaged. This client uses the service role, which
+        // bypasses the "cannot message removed contacts" RLS policy, so the
+        // confirmation is delivered.
+        const confirmation: MessageInsert = {
+          organization_id: optOut.organization_id,
+          service: "whatsapp",
+          organization_address: optOut.organization_address,
+          contact_address: optOut.contact_address,
+          direction: "outgoing",
+          content: {
+            version: "1",
+            type: "text",
+            kind: "text",
+            text: OPT_OUT_CONFIRMATIONS[optOut.language],
+          },
+        };
+
+        await client
+          .from("messages")
+          .insert(confirmation)
+          .throwOnError();
+
+        log.info("Contact opted out", {
+          organization_id: optOut.organization_id,
+          contact_address: optOut.contact_address,
+        });
+      } catch (error) {
+        log.error("Failed to process opt-out", {
+          error: error instanceof Error ? error.message : String(error),
+          organization_id: optOut.organization_id,
+          contact_address: optOut.contact_address,
+        });
+      }
+    }
   }
 
   return new Response();

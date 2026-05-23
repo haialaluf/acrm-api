@@ -168,6 +168,25 @@ Deno.serve(async (req) => {
     }
   }
 
+  // CHECK IF CONTACT HAS OPTED OUT
+
+  /**
+   * A contact that replied with an opt-out keyword (handled in
+   * whatsapp-webhook) is marked as 'removed'. Never send agent responses to
+   * removed contacts.
+   */
+
+  if (
+    conv.service !== "local" &&
+    (contact_address?.status === "removed" || contact?.status === "removed")
+  ) {
+    log.info(
+      `Contact for conversation ${conv.id} has opted out (removed). Skipping response.`,
+    );
+
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   // CHECK IF CONTACT IS ALLOWED
 
   /**
