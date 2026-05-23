@@ -669,6 +669,7 @@ export type Database = {
           name: string | null;
           organization_id: string;
           status: string;
+          tags: string[];
           updated_at: string;
         };
         Insert: {
@@ -678,6 +679,7 @@ export type Database = {
           name?: string | null;
           organization_id: string;
           status?: string;
+          tags?: string[];
           updated_at?: string;
         };
         Update: {
@@ -687,6 +689,7 @@ export type Database = {
           name?: string | null;
           organization_id?: string;
           status?: string;
+          tags?: string[];
           updated_at?: string;
         };
         Relationships: [

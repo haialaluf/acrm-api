@@ -3,6 +3,7 @@ create table public.contacts (
   id uuid default gen_random_uuid() not null,
   name text,
   extra jsonb,
+  tags text[] default '{}'::text[] not null,
   status text default 'active'::text not null,
   created_at timestamp with time zone default now() not null,
   updated_at timestamp with time zone default now() not null
