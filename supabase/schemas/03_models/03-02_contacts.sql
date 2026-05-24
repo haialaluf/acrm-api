@@ -2,6 +2,7 @@ create table public.contacts (
   organization_id uuid not null,
   id uuid default gen_random_uuid() not null,
   name text,
+  email text,
   extra jsonb,
   tags text[] default '{}'::text[] not null,
   status text default 'active'::text not null,
