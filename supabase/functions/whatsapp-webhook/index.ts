@@ -702,10 +702,13 @@ async function processMessage(request: Request): Promise<Response> {
             timestamp: new Date(webhookMessage.timestamp * 1000).toISOString(),
             // Opt-out messages must not reach the agent: a non-pending status
             // keeps handle_incoming_message_to_agent from firing. Normal
-            // messages pass undefined, so the DB applies its 'pending' default.
-            status: optOutLanguage
-              ? { read: new Date().toISOString() }
-              : undefined,
+            // messages omit `status` so the DB applies its 'pending' default.
+            // The key must be omitted (not set to `undefined`): in a bulk
+            // upsert supabase-js serializes `status: undefined` as an explicit
+            // `null`, which bypasses the column default and violates the
+            // NOT NULL constraint (error 23502).
+            ...(optOutLanguage &&
+              { status: { read: new Date().toISOString() } }),
           };
 
           messages.push(message);
