@@ -438,4 +438,16 @@ app.post("/whatsapp-management/onboard", async (c) => {
   }
 });
 
+// Return errors as JSON so clients can surface the message (e.g. Meta's
+// rejection reason) instead of an opaque "non-2xx status code".
+app.onError((err, c) => {
+  if (err instanceof HTTPException) {
+    return c.json({ error: err.message }, err.status);
+  }
+
+  log.error("Unhandled error", err);
+
+  return c.json({ error: "Internal server error" }, 500);
+});
+
 Deno.serve(app.fetch);

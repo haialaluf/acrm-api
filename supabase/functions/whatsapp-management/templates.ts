@@ -6,6 +6,14 @@ import { ContentfulStatusCode } from "jsr:@hono/hono/utils/http-status";
 
 const API_VERSION = "v24.0";
 
+// Meta Graph API errors are shaped { error: { message, error_user_title,
+// error_user_msg, ... } }. Prefer the user-facing message, then the developer
+// message, falling back to a generic label.
+function metaErrorMessage(errorBody: unknown, fallback: string): string {
+  const error = (errorBody as { error?: Record<string, string> })?.error;
+  return error?.error_user_msg || error?.message || fallback;
+}
+
 async function getBusinessCredentials(
   client: SupabaseClient<Database>,
   organization_id: string,
@@ -127,9 +135,15 @@ export async function createTemplate(
   );
 
   if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    log.error("Meta rejected template creation", {
+      status: response.status,
+      request: filteredTemplate,
+      response: errorBody,
+    });
     throw new HTTPException(response.status as ContentfulStatusCode, {
-      message: "Could not create template",
-      cause: await response.json().catch(() => ({})),
+      message: metaErrorMessage(errorBody, "Could not create template"),
+      cause: errorBody,
     });
   }
 
@@ -166,9 +180,15 @@ export async function editTemplate(
   );
 
   if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    log.error("Meta rejected template update", {
+      status: response.status,
+      request: filteredTemplate,
+      response: errorBody,
+    });
     throw new HTTPException(response.status as ContentfulStatusCode, {
-      message: "Could not update template",
-      cause: await response.json().catch(() => ({})),
+      message: metaErrorMessage(errorBody, "Could not update template"),
+      cause: errorBody,
     });
   }
 
