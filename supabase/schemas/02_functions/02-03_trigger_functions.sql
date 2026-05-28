@@ -207,6 +207,22 @@ begin
     end if;
   end if;
 
+  -- Case 1b: First-time INSERT with no synced marker (e.g. inbound message from
+  -- a new address). Auto-create a contact so the address is linked from the start.
+  if tg_op = 'INSERT'
+     and new.contact_id is null
+     and new.extra->'synced' is null then
+    insert into public.contacts (
+      organization_id,
+      name,
+      source
+    ) values (
+      new.organization_id,
+      new.extra->>'name',
+      'incoming_message'
+    ) returning id into new.contact_id;
+  end if;
+
   -- Case 2: Synced Action = REMOVE
   -- Unlink. The orphan cleanup happens in the AFTER trigger below to avoid
   -- error 27000 ("tuple to be updated was already modified by an operation
