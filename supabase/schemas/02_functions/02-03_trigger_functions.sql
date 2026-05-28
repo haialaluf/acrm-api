@@ -197,10 +197,12 @@ begin
       -- No contact linked from either side, create one
       insert into public.contacts (
         organization_id,
-        name
+        name,
+        source
       ) values (
         new.organization_id,
-        new.extra->'synced'->>'name'
+        new.extra->'synced'->>'name',
+        new.service::text
       ) returning id into new.contact_id;
     end if;
   end if;
