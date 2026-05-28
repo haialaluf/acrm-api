@@ -52,8 +52,7 @@ before insert or update
 on public.contacts_addresses
 for each row
 when (
-  new.extra->'synced' is not null -- Sync events (add/remove)
-  or new.contact_id is null -- First-time inserts: auto-create contact
+  new.extra->'synced' is not null -- Performance optimization
 )
 execute function public.manage_contact_on_address_sync();
 

@@ -21,6 +21,7 @@ import {
   uploadToStorage,
 } from "../_shared/media.ts";
 import { whatsappToMarkdown } from "../_shared/markdown.ts";
+import { linkMissingContacts } from "../_shared/contacts.ts";
 
 const API_VERSION = "v24.0";
 const VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
@@ -1066,9 +1067,10 @@ async function processMessage(request: Request): Promise<Response> {
       ).values(),
     );
 
-    const { error: contactsError } = await client
+    const { data: upserted, error: contactsError } = await client
       .from("contacts_addresses")
-      .upsert(dedupedContactsAddresses);
+      .upsert(dedupedContactsAddresses)
+      .select("organization_id, address, service, contact_id, extra");
 
     if (contactsError) {
       log.error("Failed to upsert contacts_addresses", {
@@ -1078,6 +1080,8 @@ async function processMessage(request: Request): Promise<Response> {
       });
       throw contactsError;
     }
+
+    await linkMissingContacts(client, upserted);
 
     log.info("Persisted contacts_addresses", {
       count: contacts_addresses.length,

@@ -22,6 +22,7 @@ import {
   MAX_STORAGE_UPLOAD_SIZE,
   uploadToStorage,
 } from "../_shared/media.ts";
+import { linkMissingContacts } from "../_shared/contacts.ts";
 
 const API_VERSION = "v25.0";
 const VERIFY_TOKEN = Deno.env.get("INSTAGRAM_VERIFY_TOKEN");
@@ -861,9 +862,10 @@ async function processMessage(request: Request): Promise<Response> {
 
   if (contacts_addresses.length > 0) {
     // Already deduped at the Map level (keyed by `${organization_id}|${igsid}`).
-    const { error: contactsError } = await client
+    const { data: upserted, error: contactsError } = await client
       .from("contacts_addresses")
-      .upsert(contacts_addresses);
+      .upsert(contacts_addresses)
+      .select("organization_id, address, service, contact_id, extra");
 
     if (contactsError) {
       log.error("Failed to upsert contacts_addresses", {
@@ -872,6 +874,8 @@ async function processMessage(request: Request): Promise<Response> {
       });
       throw contactsError;
     }
+
+    await linkMissingContacts(client, upserted);
   }
 
   // See WA webhook for the rationale on the upsert pattern: status rows ride
