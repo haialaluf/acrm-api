@@ -59,6 +59,20 @@ when (
 )
 execute function public.lookup_user_id_by_email_before_insert_on_agents();
 
+-- Notify the invitee by email once a pending invitation has been created.
+-- Reuses the generic pg_net/vault edge function caller; the payload is the
+-- standard webhook shape ({ record, old_record, type, table, schema }).
+create trigger send_invitation_email
+after insert
+on public.agents
+for each row
+when (
+  new.ai = false
+  and new.extra->'invitation'->>'status' = 'pending'
+  and new.extra->'invitation'->>'email' is not null
+)
+execute function public.edge_function('/send-invitation-email', 'post');
+
 -- should execute after set_extra
 create trigger z_enforce_invitation_status_flow
 before update

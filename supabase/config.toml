@@ -41,6 +41,11 @@ verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/mcp/index.ts"
 
+[functions.send-invitation-email]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/send-invitation-email/index.ts"
+
 [auth]
 # Base URL of the SPA; used as allow-list for OAuth `redirectTo` after Google returns to Supabase.
 site_url = "https://acrm-app.tika-ai.com"
