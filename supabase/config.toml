@@ -1,7 +1,7 @@
 # For detailed configuration reference documentation, visit:
 # https://supabase.com/docs/guides/local-development/cli/config
 
-project_id = "open-bsp-api"
+project_id = "acrm-api"
 
 [api]
 schemas = ["public", "storage", "billing"]

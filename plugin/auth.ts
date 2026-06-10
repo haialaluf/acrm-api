@@ -5,7 +5,7 @@
  * and persists the session. Subsequent runs load from disk and refresh
  * automatically.
  *
- * Pattern follows open-bsp-ui's login.tsx and client.ts.
+ * Pattern follows acrm-ui's login.tsx and client.ts.
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -145,7 +145,7 @@ async function oauthLoopback(
     throw new Error(`Failed to get OAuth URL: ${error?.message ?? "no url"}`);
   }
 
-  console.error(`openbsp: opening browser for Google sign-in...`);
+  console.error(`acrm: opening browser for Google sign-in...`);
   console.error(`  If the browser doesn't open, visit: ${data.url}`);
 
   // Open browser
@@ -196,7 +196,7 @@ export async function authenticate(): Promise<SupabaseClient> {
     },
   });
 
-  // Reconnect strategy (from open-bsp-ui)
+  // Reconnect strategy (from acrm-ui)
   supabase.realtime.reconnectAfterMs = (attempt: number) => {
     return Math.min(10 * 1000, attempt * 1000);
   };
@@ -225,14 +225,14 @@ export async function authenticate(): Promise<SupabaseClient> {
       } = await supabase.auth.getUser();
       if (user) {
         console.error(
-          `openbsp: authenticated as ${user.email ?? user.id}`,
+          `acrm: authenticated as ${user.email ?? user.id}`,
         );
         return supabase;
       }
     }
 
     console.error(
-      `openbsp: saved session expired or invalid, re-authenticating...`,
+      `acrm: saved session expired or invalid, re-authenticating...`,
     );
   }
 
@@ -250,7 +250,7 @@ export async function authenticate(): Promise<SupabaseClient> {
     data: { user },
   } = await supabase.auth.getUser();
   console.error(
-    `openbsp: authenticated as ${user?.email ?? user?.id ?? "unknown"}`,
+    `acrm: authenticated as ${user?.email ?? user?.id ?? "unknown"}`,
   );
 
   return supabase;

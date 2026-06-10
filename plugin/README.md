@@ -1,7 +1,7 @@
-# OpenBSP Plugin for Claude Code
+# Acrm Plugin for Claude Code
 
 An [MCP plugin](https://code.claude.com/docs/en/plugins) that gives Claude Code
-full access to the OpenBSP platform — query any API endpoint, manage contacts,
+full access to the Acrm platform — query any API endpoint, manage contacts,
 conversations, templates, and more. Optionally bridges WhatsApp messages into
 your session in real-time via Supabase Realtime.
 
@@ -18,7 +18,7 @@ your session in real-time via Supabase Realtime.
 
 1. **API access (always available):** The `query` tool makes authenticated HTTP
    requests to PostgREST and Edge Functions. Claude reads the
-   `openbsp://api-reference` resource for schema and syntax, then queries
+   `acrm://api-reference` resource for schema and syntax, then queries
    freely.
 2. **WhatsApp channel (optional):** If a connected WhatsApp account is found,
    the plugin subscribes to Supabase Realtime. Incoming messages appear as
@@ -31,7 +31,7 @@ If no WhatsApp account is available (or resolution fails), the plugin runs in
 
 - [Deno](https://deno.com) v2+
 - [Claude Code](https://claude.com/claude-code) v2.1.80+
-- An OpenBSP user account (Google SSO)
+- An Acrm user account (Google SSO)
 
 ## Quick start
 
@@ -48,13 +48,13 @@ sessions are refreshed automatically.
 **Self-hosted users:** Point to your own Supabase instance:
 
 ```
-/openbsp:config configure https://your-project.supabase.co your-anon-key
+/acrm:config configure https://your-project.supabase.co your-anon-key
 ```
 
 ## API access
 
 The `query` tool lets Claude make any authenticated API call. Before the first
-query, Claude reads the `openbsp://api-reference` resource which contains table
+query, Claude reads the `acrm://api-reference` resource which contains table
 schemas, PostgREST syntax, and example queries.
 
 ### Example queries
@@ -91,17 +91,17 @@ added. All messages from unknown contacts are silently dropped. This does not
 affect API access (RLS governs that).
 
 ```
-/openbsp:config contacts add 5491155551234
-/openbsp:config contacts add 5491155555678
-/openbsp:config contacts                       # show who's allowed
-/openbsp:config contacts remove 5491155551234  # remove one
-/openbsp:config contacts clear                 # block all again
+/acrm:config contacts add 5491155551234
+/acrm:config contacts add 5491155555678
+/acrm:config contacts                       # show who's allowed
+/acrm:config contacts remove 5491155551234  # remove one
+/acrm:config contacts clear                 # block all again
 ```
 
 ### What Claude sees
 
 ```xml
-<channel source="openbsp" contact_phone="5491155551234" contact_name="John" direction="incoming" service="whatsapp" message_id="uuid">
+<channel source="acrm" contact_phone="5491155551234" contact_name="John" direction="incoming" service="whatsapp" message_id="uuid">
 Hello, I need help with my order
 </channel>
 ```
@@ -125,7 +125,7 @@ All configuration is managed through skills — no need to hand-edit files.
 ### Check status
 
 ```
-/openbsp:config
+/acrm:config
 ```
 
 Shows: Supabase URL, auth state, org, WhatsApp account, channel status (active
@@ -134,14 +134,14 @@ or API-only), and allowed contacts.
 ### Multi-org / multi-account
 
 ```
-/openbsp:config organization <org-uuid>
-/openbsp:config account <phone-digits>
+/acrm:config organization <org-uuid>
+/acrm:config account <phone-digits>
 ```
 
 ### Force re-authentication
 
 ```
-/openbsp:config login
+/acrm:config login
 ```
 
 ### Advanced: environment variables
@@ -154,11 +154,11 @@ Env vars override everything (for CI or scripting):
 | `SUPABASE_ANON_KEY` | Supabase anonymous key                                           |
 | `ORG_ID`            | Organization ID (multi-org)                                      |
 | `ACCOUNT_PHONE`     | WhatsApp account phone, digits only (multi-account)              |
-| `OPENBSP_STATE_DIR` | Override state directory (default: `~/.claude/channels/openbsp`) |
+| `ACRM_STATE_DIR` | Override state directory (default: `~/.claude/channels/acrm`) |
 
 ### Config file
 
-All settings are stored in `~/.claude/channels/openbsp/config.json`:
+All settings are stored in `~/.claude/channels/acrm/config.json`:
 
 ```json
 {
@@ -176,11 +176,11 @@ channel messages (secure by default).
 
 ## Authentication
 
-The plugin uses Google SSO (same as the OpenBSP UI). No API keys or service role
+The plugin uses Google SSO (same as the Acrm UI). No API keys or service role
 keys needed.
 
 **First run:** opens your browser for Google sign-in. The session is saved to
-`~/.claude/channels/openbsp/session.json` (0600 permissions).
+`~/.claude/channels/acrm/session.json` (0600 permissions).
 
 **Subsequent runs:** the saved session is loaded and refreshed automatically. If
 the refresh token is expired, the browser opens again.
@@ -193,11 +193,11 @@ plugin/
 ├── api-reference.ts       # Curated API reference (MCP resource)
 ├── auth.ts                # OAuth loopback flow + session persistence
 ├── config.ts              # Config type, load/save helpers, constants
-├── types.ts               # OpenBSP types (subset from _shared/supabase.ts)
+├── types.ts               # Acrm types (subset from _shared/supabase.ts)
 ├── deno.json              # Import map
 ├── skills/
 │   └── configure/
-│       └── SKILL.md       # /openbsp:config skill
+│       └── SKILL.md       # /acrm:config skill
 └── .claude-plugin/
     └── plugin.json        # Plugin metadata
 ```
@@ -208,11 +208,11 @@ plugin/
 paste it manually. This can happen in headless/SSH environments.
 
 **"No organization found for this user"** Your Google account isn't associated
-with any OpenBSP organization. Sign in to the UI app first to verify your
+with any Acrm organization. Sign in to the UI app first to verify your
 account.
 
 **"Multiple accounts found"** Set the account phone:
-`/openbsp:config account <phone>`
+`/acrm:config account <phone>`
 
 **Realtime not receiving messages** Check that the `supabase_realtime`
 publication includes the `messages` and `conversations` tables. Check the Claude
@@ -222,4 +222,4 @@ Code debug log at `~/.claude/debug/<session-id>.txt` for stderr output.
 [enable channels](https://code.claude.com/docs/en/channels#enterprise-controls).
 
 **API-only mode (no WhatsApp account)** The `query` tool still works. `reply` is
-not available. Check `/openbsp:config` for details.
+not available. Check `/acrm:config` for details.

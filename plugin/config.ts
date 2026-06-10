@@ -1,5 +1,5 @@
 /**
- * Unified configuration for the OpenBSP plugin.
+ * Unified configuration for the Acrm plugin.
  *
  * Priority: env vars > config.json > hardcoded defaults.
  * Production defaults (Supabase URL + anon key) are baked in — these are
@@ -12,14 +12,14 @@ import { join } from "node:path";
 
 // ── Constants ────────────────────────────────────────────────────────────
 
-export const STATE_DIR = Deno.env.get("OPENBSP_STATE_DIR") ??
-  join(homedir(), ".claude", "channels", "openbsp");
+export const STATE_DIR = Deno.env.get("ACRM_STATE_DIR") ??
+  join(homedir(), ".claude", "channels", "acrm");
 
 export const CONFIG_FILE = join(STATE_DIR, "config.json");
 export const SESSION_FILE = join(STATE_DIR, "session.json");
 
 // Production defaults — same as VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
-// in open-bsp-ui. These are public (embedded in the SPA bundle).
+// in acrm-ui. These are public (embedded in the SPA bundle).
 const DEFAULT_SUPABASE_URL = "https://nheelwshzbgenpavwhcy.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY =
   "sb_publishable_jS_LQSbttNz2nRyAcjOVUw_J1KpXhUd";

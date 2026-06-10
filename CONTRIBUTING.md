@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to OpenBSP API!
+Thanks for your interest in contributing to Acrm API!
 
 ## Local Setup
 
@@ -9,7 +9,7 @@ Requires Node and Docker.
 1. Clone the repo:
    ```bash
    git clone https://github.com/matiasbattocchia/open-bsp-api
-   cd open-bsp-api
+   cd acrm-api
    ```
 
 2. Start the local Supabase instance:

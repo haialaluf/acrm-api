@@ -1,7 +1,7 @@
 {
   "plugins": [
     {
-      "name": "openbsp",
+      "name": "acrm",
       "path": "plugin"
     }
   ]

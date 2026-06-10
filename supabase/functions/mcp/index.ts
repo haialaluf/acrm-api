@@ -82,7 +82,7 @@ function createMcpServer(
   allowedAccounts: string[],
 ) {
   const server = new McpServer({
-    name: "open-bsp-mcp",
+    name: "acrm-mcp",
     version: "1.1.0",
   });
 

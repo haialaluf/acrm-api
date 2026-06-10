@@ -1,11 +1,11 @@
 /**
- * Curated API reference for the OpenBSP query tool.
+ * Curated API reference for the Acrm query tool.
  *
- * Registered as MCP resource `openbsp://api-reference`.
+ * Registered as MCP resource `acrm://api-reference`.
  * Source: openapi.json definitions + PostgREST docs + Edge Function endpoints.
  */
 
-export const API_REFERENCE = `# OpenBSP API Reference
+export const API_REFERENCE = `# Acrm API Reference
 
 ## PostgREST Query Syntax
 

@@ -1,4 +1,4 @@
-<h1 align="center">OpenBSP API</h1>
+<h1 align="center">Acrm API</h1>
 <p align="center">
   <strong>Open-source WhatsApp Business Platform</strong>
 </p>
@@ -7,14 +7,14 @@
 </p>
 
 <p align="center">
-  <a href="https://web.openbsp.dev"><img src="https://img.shields.io/badge/%F0%9F%9A%80_try_it-web.openbsp.dev-C26A3D" alt="Try it"></a>&nbsp;
+  <a href="https://web.acrm.dev"><img src="https://img.shields.io/badge/%F0%9F%9A%80_try_it-web.acrm.dev-C26A3D" alt="Try it"></a>&nbsp;
   <a href="https://unlicense.org/"><img src="https://img.shields.io/badge/license-Unlicense-blue.svg" alt="License: Unlicense"></a>&nbsp;
   <a href="https://github.com/matiasbattocchia/open-bsp-api/stargazers"><img src="https://img.shields.io/github/stars/matiasbattocchia/open-bsp-api" alt="GitHub Stars"></a>&nbsp;
   <a href="https://github.com/matiasbattocchia/open-bsp-api/commits/main"><img src="https://img.shields.io/github/last-commit/matiasbattocchia/open-bsp-api" alt="Last Commit"></a>&nbsp;
   <a href="https://chat.whatsapp.com/Ch6AwZizSDt5quzHodcYh5"><img src="https://img.shields.io/badge/Community-25D366?logo=whatsapp&logoColor=white" alt="Community"></a>
 </p>
 
-OpenBSP is designed for both individual businesses and service providers. You
+Acrm is designed for both individual businesses and service providers. You
 can use it to manage your own WhatsApp messaging, or leverage its features to
 become a
 [Meta Business Partner](https://developers.facebook.com/docs/whatsapp/solution-providers)
@@ -32,7 +32,7 @@ https://github.com/user-attachments/assets/1ef30dde-9de1-4f5a-856a-db34ca2e3063
 
 ## Description
 
-OpenBSP API is a multi-tenant platform that connects to the official WhatsApp
+Acrm API is a multi-tenant platform that connects to the official WhatsApp
 API to receive and send messages, storing them in a Supabase-backed database.
 
 ### Core features
@@ -75,7 +75,7 @@ Interpret and extract information from media and document files, including:
 
 ### Claude Code plugin
 
-The OpenBSP plugin gives Claude Code full API access and optionally bridges
+The Acrm plugin gives Claude Code full API access and optionally bridges
 WhatsApp messages in real-time. Claude can query contacts, conversations,
 templates, and more via the `query` tool, and reply to WhatsApp messages via the
 `reply` tool.
@@ -91,7 +91,7 @@ On first run, a browser opens for Google sign-in (same account as the web UI).
 Then configure allowed contacts for the WhatsApp channel:
 
 ```
-/openbsp:config contacts add 5491155551234
+/acrm:config contacts add 5491155551234
 ```
 
 No contacts are forwarded until explicitly added (secure by default). API access
@@ -104,7 +104,7 @@ The `mcp` Edge Function exposes an [MCP](https://modelcontextprotocol.io) server
 over SSE, giving agentic access to the WhatsApp API from clients like Claude
 Desktop or other agent platforms.
 
-For the hosted version at [web.openbsp.dev](https://web.openbsp.dev), the MCP
+For the hosted version at [web.acrm.dev](https://web.acrm.dev), the MCP
 server URL is:
 
 ```
@@ -112,7 +112,7 @@ https://nheelwshzbgenpavwhcy.supabase.co/functions/v1/mcp
 ```
 
 Authentication uses the `Authorization: Bearer <API_KEY>` header. Get it from
-OpenBSP > Settings > API Keys.
+Acrm > Settings > API Keys.
 
 Optionally, `Allowed-Contacts` and `Allowed-Accounts` headers restrict which
 phone numbers the key can access.
@@ -122,7 +122,7 @@ Claude Desktop configuration (`claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
-    "openbsp": {
+    "acrm": {
       "url": "https://nheelwshzbgenpavwhcy.supabase.co/functions/v1/mcp",
       "headers": {
         "Authorization": "Bearer <API_KEY>"
@@ -147,7 +147,7 @@ Available tools:
 ## Demo
 
 A managed instance is available at
-**[web.openbsp.dev](https://web.openbsp.dev)** — same codebase as this repo,
+**[web.acrm.dev](https://web.acrm.dev)** — same codebase as this repo,
 running on Supabase. Sign up with a Google or GitHub account.
 
 ### Quotas
@@ -190,7 +190,7 @@ In the [Supabase Dashboard](https://supabase.com/dashboard):
 1. Go to **Project Settings** > **Integrations**
 2. Under **GitHub Integration**, click **Authorize GitHub**
 3. On the GitHub authorization page, click **Authorize Supabase**
-4. Back on the Integrations page, choose your forked **open-bsp-api** repository
+4. Back on the Integrations page, choose your forked **acrm-api** repository
 5. Set the **Working directory** to `.` (the `supabase/` folder lives at the
    repo root)
 6. Set the **Production branch** to `main`
@@ -214,7 +214,7 @@ self-contained in GitHub Actions instead of relying on Supabase's integration.
 > Create the secrets at GitHub > Repository > Settings ⚙️ > Secrets and
 > variables \*️⃣ > Actions > Secrets
 >
-> <!-- `https://github.com/{github_account}/open-bsp-api/settings/secrets/actions` -->
+> <!-- `https://github.com/{github_account}/acrm-api/settings/secrets/actions` -->
 
 - **SUPABASE_ACCESS_TOKEN**: A
   [personal access token](https://supabase.com/dashboard/account/tokens)
@@ -230,7 +230,7 @@ self-contained in GitHub Actions instead of relying on Supabase's integration.
 > Create the variables at GitHub > Repository > Settings ⚙️ > Secrets and
 > variables \*️⃣ > Actions > Variables
 >
-> <!-- `https://github.com/{github_account}/open-bsp-api/settings/variables/actions` -->
+> <!-- `https://github.com/{github_account}/acrm-api/settings/variables/actions` -->
 
 - **SUPABASE_PROJECT_ID**
   <!-- the `{project_id}` in `https://supabase.com/dashboard/project/{project_id}` -->
@@ -243,7 +243,7 @@ self-contained in GitHub Actions instead of relying on Supabase's integration.
 > [!TIP]
 > Go to GitHub > Repository > Actions ▶️ > Release
 >
-> <!-- `https://github.com/{github_account}/open-bsp-api/actions/workflows/release.yml` -->
+> <!-- `https://github.com/{github_account}/acrm-api/actions/workflows/release.yml` -->
 
 1. Click **Run workflow**
 
@@ -251,7 +251,7 @@ self-contained in GitHub Actions instead of relying on Supabase's integration.
 
 ## WhatsApp integration
 
-To connect your OpenBSP project to the WhatsApp API, you'll need to setup a Meta
+To connect your Acrm project to the WhatsApp API, you'll need to setup a Meta
 App with the WhatsApp product and configure the following Edge Functions
 secrets. You can set these up in two ways:
 
@@ -465,7 +465,7 @@ insert into public.organizations_addresses (address, organization_id, service, e
 New to Supabase? In one sentence: it's a hosted Postgres platform that
 auto-exposes your tables over a REST and realtime API, runs Deno-based Edge
 Functions for server-side logic, and handles auth and file storage on top.
-OpenBSP leans heavily on those primitives — most business logic lives as SQL
+Acrm leans heavily on those primitives — most business logic lives as SQL
 triggers and Edge Functions, and clients (the web UI, the Claude Code plugin,
 custom integrations) talk to Postgres directly through a
 [Supabase client library](https://supabase.com/docs/guides/api/rest/client-libs)

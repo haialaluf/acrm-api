@@ -116,7 +116,7 @@ async function resolveAgentConfig(agent: Agent): Promise<ResolvedAgentExtra> {
 ## Data Export (Hosted → Self-Hosted)
 
 Allow users to export their organization data from the hosted instance
-(web.openbsp.dev) and import it into a self-hosted deployment.
+(web.acrm.dev) and import it into a self-hosted deployment.
 
 ### Why it works
 
