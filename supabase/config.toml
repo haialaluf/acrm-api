@@ -48,8 +48,11 @@ entrypoint = "./functions/send-invitation-email/index.ts"
 
 [auth]
 # Base URL of the SPA; used as allow-list for OAuth `redirectTo` after Google returns to Supabase.
-site_url = "https://acrm-app.tika-ai.com"
+site_url = "https://app.delacrm.com"
 additional_redirect_urls = [
+  "https://app.delacrm.com",
+  "https://app.delacrm.com/**",
+  # kept during the domain cutover; remove once tika-ai is fully retired
   "https://acrm-app.tika-ai.com",
   "https://acrm-app.tika-ai.com/**",
 ]
