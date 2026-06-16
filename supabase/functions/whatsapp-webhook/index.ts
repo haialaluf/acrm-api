@@ -32,12 +32,12 @@ const DEFAULT_ACCESS_TOKEN = Deno.env.get("META_SYSTEM_USER_ACCESS_TOKEN") ||
 
 /**
  * Opt-out: a contact can remove themselves by replying with exactly "הסר" or
- * "remove" (trimmed, case-insensitive). The matched language drives the
+ * "STOP" (trimmed, case-insensitive). The matched language drives the
  * confirmation reply below.
  */
 const OPT_OUT_KEYWORDS: Record<string, "he" | "en"> = {
   "הסר": "he",
-  "remove": "en",
+  "STOP": "en",
 };
 
 const OPT_OUT_CONFIRMATIONS: Record<"he" | "en", string> = {
