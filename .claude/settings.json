@@ -6,15 +6,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.(ts|tsx|js|jsx|json|jsonc|md)$' | xargs -r deno fmt 2>/dev/null || true"
+            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.(ts|tsx|js|jsx|json|jsonc|md)$' | grep -F \"$CLAUDE_PROJECT_DIR/\" | xargs -r deno fmt 2>/dev/null || true"
           },
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.(ts|tsx|js|jsx)$' | xargs -r deno lint 2>/dev/null || true"
+            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.(ts|tsx|js|jsx)$' | grep -F \"$CLAUDE_PROJECT_DIR/\" | xargs -r deno lint 2>/dev/null || true"
           },
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.(ts|tsx)$' | xargs -r -n1 deno check 2>/dev/null || true"
+            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.(ts|tsx)$' | grep -F \"$CLAUDE_PROJECT_DIR/\" | xargs -r -n1 deno check 2>/dev/null || true"
           }
         ]
       }

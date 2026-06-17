@@ -19,7 +19,7 @@ Use the Supabase Management API to query `function_logs` (edge function stdout):
 
 ```bash
 ACCESS_TOKEN=$(cat ~/.supabase/access-token)
-REF="nheelwshzbgenpavwhcy"
+REF="ndxlahgkhrabfnugrxtp"
 
 curl -s "https://api.supabase.com/v1/projects/${REF}/analytics/endpoints/logs.all" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
