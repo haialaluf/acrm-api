@@ -375,11 +375,13 @@ export class ChatCompletionsHandler
     const chatCompletionMessages = this.mergeToolUseMessages(messages);
 
     const context = {
+      now: dayjs.utc().toISOString(),
       user: {
         name: this.context.contact?.name,
         phone: this.context.conversation.contact_address
           ? "+" + this.context.conversation.contact_address
           : undefined,
+        email: this.context.contact?.email ?? undefined,
       },
     };
 
