@@ -375,7 +375,6 @@ export class ChatCompletionsHandler
     const chatCompletionMessages = this.mergeToolUseMessages(messages);
 
     const context = {
-      now: dayjs.utc().format("dddd, YYYY-MM-DD HH:mm [UTC]"),
       user: {
         name: this.context.contact?.name,
         phone: this.context.conversation.contact_address
@@ -497,34 +496,37 @@ export class ChatCompletionsHandler
 
     const billable = !agent.extra.api_key;
 
-    // Fetch cost pricing before the LLM call
-    const { data: costs } = await this.client
-      .schema("billing")
-      .from("costs")
-      .select("pricing, quantity")
-      .eq("provider", provider)
-      .eq("product", model)
-      .lte("effective_at", new Date().toISOString())
-      .order("effective_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .throwOnError();
-
-    if (billable) {
-      // Block if we don't have pricing for this model
-      if (!costs) {
-        throw new Error(`No pricing found for ${provider}/${model}`);
-      }
-
-      // Check AI credits balance
-      await this.client
+    // Fetch cost pricing and check the credit balance concurrently before the
+    // LLM call. These two queries are independent, so running them in parallel
+    // removes one serial round-trip from the time-to-first-token.
+    const [{ data: costs }] = await Promise.all([
+      this.client
         .schema("billing")
-        .rpc("check_limit", {
-          _organization_id: organization.id,
-          _product_id: "ai_credits",
-          _amount: 0,
-        })
-        .throwOnError();
+        .from("costs")
+        .select("pricing, quantity")
+        .eq("provider", provider)
+        .eq("product", model)
+        .lte("effective_at", new Date().toISOString())
+        .order("effective_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .throwOnError(),
+      // Check AI credits balance (only when we are the ones billing).
+      billable
+        ? this.client
+          .schema("billing")
+          .rpc("check_limit", {
+            _organization_id: organization.id,
+            _product_id: "ai_credits",
+            _amount: 0,
+          })
+          .throwOnError()
+        : Promise.resolve(null),
+    ]);
+
+    // Block if we don't have pricing for a model we are billing.
+    if (billable && !costs) {
+      throw new Error(`No pricing found for ${provider}/${model}`);
     }
 
     const openai = new OpenAI({

@@ -49,7 +49,7 @@ export type AgentTool = {
 const PAUSED_CONV_WINDOW = 12 * 60 * 60 * 1000; // 12 hours
 const MESSAGES_TIME_LIMIT = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MESSAGES_QUANTITY_LIMIT = 50;
-const RESPONSE_DELAY_SECS = 3; // 3 seconds
+const RESPONSE_DELAY_SECS = 1; // 1 second
 const MEDIA_PREPROCESSING_TIMEOUT = 30 * 1000; // 30 seconds
 const MEDIA_PREPROCESSING_POLLING_INTERVAL = 5 * 1000; // 5 seconds
 
