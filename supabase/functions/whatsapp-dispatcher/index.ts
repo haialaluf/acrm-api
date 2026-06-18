@@ -381,6 +381,104 @@ async function postPayloadToWhatsAppEndpoint({
   return await response.json();
 }
 
+/**
+ * Sends a single outgoing message to WhatsApp and records the result on the row.
+ *
+ * On success the row is marked accepted/sent. On a *permanent* Meta error the
+ * row is marked failed (which stops retries) and the function returns normally.
+ * On a *transient* error the row keeps its pending status and the error is
+ * rethrown so the caller can return a 500 and let the dispatch cron retry it.
+ */
+async function sendOutgoingMessage({
+  message,
+  access_token,
+  client,
+}: {
+  message: MessageRow;
+  access_token: string;
+  client: SupabaseClient;
+}): Promise<void> {
+  try {
+    const patchedMessage = await uploadMediaItem({
+      message,
+      access_token,
+      client,
+    });
+
+    const payload = await outgoingMessageToEndpointMessage({
+      content: patchedMessage.content as OutgoingMessage,
+      to: message.contact_address!,
+    });
+
+    const response = await postPayloadToWhatsAppEndpoint({
+      payload,
+      phone_number_id: message.organization_address,
+      access_token,
+    });
+
+    await client
+      .from("messages")
+      .update({
+        external_id: response.messages[0].id,
+        status: {
+          [response.messages[0].message_status || "accepted"]: new Date()
+            .toISOString(),
+        },
+      })
+      .eq("id", message.id)
+      .throwOnError();
+  } catch (error) {
+    const isWhatsAppError = error instanceof WhatsAppError;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const metaCode = isWhatsAppError
+      ? (error.cause as { error?: { code?: number } } | undefined)?.error
+        ?.code
+      : undefined;
+    const isRetryable = metaCode != null &&
+      RETRYABLE_META_CODES.has(metaCode);
+    const errorDetail: Json = isWhatsAppError
+      ? error.cause as Json
+      : errorMessage;
+
+    if (isRetryable) {
+      // Transient: record the error for user visibility but keep retryable (no "failed" key).
+      // The merge_update trigger overwrites the errors array on each retry.
+      log.warn("Dispatch failed (transient, will retry)", {
+        message_id: message.id,
+        code: metaCode,
+        error: errorMessage,
+      });
+
+      await client
+        .from("messages")
+        .update({ status: { errors: [errorDetail] } })
+        .eq("id", message.id)
+        .throwOnError();
+
+      // Rethrow so the function returns 500 and the cron retries.
+      throw error;
+    }
+
+    // Permanent: mark as failed to stop retries.
+    log.error("Dispatch failed (permanent)", {
+      message_id: message.id,
+      code: metaCode,
+      error: errorMessage,
+    });
+
+    await client
+      .from("messages")
+      .update({
+        status: {
+          failed: new Date().toISOString(),
+          errors: [errorDetail],
+        },
+      })
+      .eq("id", message.id)
+      .throwOnError();
+  }
+}
+
 Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization");
   const token = authHeader?.replace("Bearer ", "");
@@ -412,85 +510,77 @@ Deno.serve(async (req) => {
   const access_token = account.access_token || DEFAULT_ACCESS_TOKEN;
 
   if (message.direction === "outgoing") {
+    // Per-conversation dispatch mutex. A multi-message turn inserts several
+    // outgoing rows in one batch, and each row fires its own dispatcher
+    // invocation via pg_net. Sending each its own message concurrently gives no
+    // ordering guarantee at WhatsApp, so instead a single invocation claims the
+    // conversation and drains all its pending messages in timestamp order while
+    // the others no-op.
+    const conversationId = message.conversation_id;
+    const workerId = crypto.randomUUID();
+
+    const { data: claimed } = await client
+      .rpc("claim_conversation_dispatch", {
+        _conversation_id: conversationId,
+        _worker_id: workerId,
+      })
+      .throwOnError();
+
+    if (!claimed) {
+      log.info(
+        `Conversation ${conversationId} is already being dispatched; deferring message ${message.id} to the active worker.`,
+      );
+      return new Response();
+    }
+
     try {
-      const patchedMessage = await uploadMediaItem({
-        message,
-        access_token,
-        client,
-      });
-
-      const payload = await outgoingMessageToEndpointMessage({
-        content: patchedMessage.content as OutgoingMessage,
-        to: message.contact_address,
-      });
-
-      const response = await postPayloadToWhatsAppEndpoint({
-        payload,
-        phone_number_id: message.organization_address,
-        access_token,
-      });
-
-      await client
-        .from("messages")
-        .update({
-          external_id: response.messages[0].id,
-          status: {
-            [response.messages[0].message_status || "accepted"]: new Date()
-              .toISOString(),
-          },
-        })
-        .eq("id", message.id)
-        .throwOnError();
-    } catch (error) {
-      const isWhatsAppError = error instanceof WhatsAppError;
-      const errorMessage = error instanceof Error
-        ? error.message
-        : String(error);
-      const metaCode = isWhatsAppError
-        ? (error.cause as { error?: { code?: number } } | undefined)?.error
-          ?.code
-        : undefined;
-      const isRetryable = metaCode != null &&
-        RETRYABLE_META_CODES.has(metaCode);
-      const errorDetail: Json = isWhatsAppError
-        ? error.cause as Json
-        : errorMessage;
-
-      if (isRetryable) {
-        // Transient: record the error for user visibility but keep retryable (no "failed" key).
-        // The merge_update trigger overwrites the errors array on each retry.
-        log.warn("Dispatch failed (transient, will retry)", {
-          message_id: message.id,
-          code: metaCode,
-          error: errorMessage,
-        });
-
-        await client
+      // Drain pending outgoing messages oldest-first. Messages inserted
+      // mid-drain are picked up on the next iteration. The selection mirrors the
+      // dispatch-outgoing-pending-messages cron, which also backstops the rare
+      // lost-wakeup (a message landing between our final empty read and the
+      // release below).
+      while (true) {
+        const { data: pending } = await client
           .from("messages")
-          .update({ status: { errors: [errorDetail] } })
-          .eq("id", message.id)
+          .select("*")
+          .eq("conversation_id", conversationId)
+          .eq("direction", "outgoing")
+          .lte("timestamp", new Date().toISOString())
+          .not("status->>pending", "is", null)
+          .is("status->>held_for_quality_assessment", null)
+          .is("status->>accepted", null)
+          .is("status->>sent", null)
+          .is("status->>delivered", null)
+          .is("status->>read", null)
+          .is("status->>failed", null)
+          .order("timestamp", { ascending: true })
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .limit(1)
           .throwOnError();
 
-        // Rethrow so the function returns 500 and the cron retries.
-        throw error;
+        const next = pending?.[0] as MessageRow | undefined;
+        if (!next) break;
+
+        // Extend the lease before a potentially slow send (e.g. media upload).
+        await client
+          .rpc("claim_conversation_dispatch", {
+            _conversation_id: conversationId,
+            _worker_id: workerId,
+          })
+          .throwOnError();
+
+        // A transient failure rethrows here, stopping the drain at the failed
+        // message (so later messages never jump ahead of it) and surfacing a
+        // 500 for the cron to retry. The finally below still releases the lock.
+        await sendOutgoingMessage({ message: next, access_token, client });
       }
-
-      // Permanent: mark as failed to stop retries.
-      log.error("Dispatch failed (permanent)", {
-        message_id: message.id,
-        code: metaCode,
-        error: errorMessage,
-      });
-
+    } finally {
       await client
-        .from("messages")
-        .update({
-          status: {
-            failed: new Date().toISOString(),
-            errors: [errorDetail],
-          },
+        .rpc("release_conversation_dispatch", {
+          _conversation_id: conversationId,
+          _worker_id: workerId,
         })
-        .eq("id", message.id)
         .throwOnError();
     }
   } else if (message.direction === "incoming") {

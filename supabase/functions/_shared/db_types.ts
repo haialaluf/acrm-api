@@ -1155,6 +1155,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      claim_conversation_dispatch: {
+        Args: {
+          _conversation_id: string
+          _ttl_seconds?: number
+          _worker_id: string
+        }
+        Returns: boolean
+      }
       contact_address_update_rules: {
         Args: {
           p_address: string
@@ -1196,6 +1204,10 @@ export type Database = {
       org_update_by_admin_rules: {
         Args: { p_id: string; p_name: string }
         Returns: boolean
+      }
+      release_conversation_dispatch: {
+        Args: { _conversation_id: string; _worker_id: string }
+        Returns: undefined
       }
     }
     Enums: {
