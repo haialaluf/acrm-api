@@ -375,7 +375,7 @@ export class ChatCompletionsHandler
     const chatCompletionMessages = this.mergeToolUseMessages(messages);
 
     const context = {
-      now: dayjs.utc().toISOString(),
+      now: dayjs().format('YYYY-MM-DD HH:mm z'),
       user: {
         name: this.context.contact?.name,
         phone: this.context.conversation.contact_address
