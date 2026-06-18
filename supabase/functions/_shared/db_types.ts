@@ -1146,6 +1146,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      claim_conversation: {
+        Args: {
+          _conversation_id: string
+          _message_at: string
+          _message_id: string
+          _ttl_seconds?: number
+        }
+        Returns: boolean
+      }
       contact_address_update_rules: {
         Args: {
           p_address: string

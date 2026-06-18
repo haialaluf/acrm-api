@@ -29,10 +29,12 @@ import { getFileMetadata } from "../../_shared/media.ts";
 import { serializePartAsXML } from "./serializer.ts";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import { inspect } from "node:util";
+import { getTimezoneFromPhone } from "../../_shared/phone.ts";
 dayjs.extend(utc);
+dayjs.extend(timezone);
 
-const MULTI_MESSAGE_RESPONSE = true;
 const RESPOND_FUNCTION_NAME = "respond";
 
 const RESPOND_TOOL: ChatCompletionTool = {
@@ -40,7 +42,7 @@ const RESPOND_TOOL: ChatCompletionTool = {
   function: {
     name: RESPOND_FUNCTION_NAME,
     description:
-      "Default tool. Always call this to send messages to the user, unless you need to call another tool first. Call with an empty messages array to skip responding.",
+      'Send a message to the user. Keep messages short — one or two sentences, like a quick chat message, never long paragraphs. Use this sparingly: do NOT send a message after every tool call. While working through several tools, send at most one brief heads-up (e.g. "One sec, checking availability…") and then one short message with the result. Also use it to attach a file or to split a reply into a couple of separate short messages. Never use this to report or apologize for a tool failure or error: when a tool call fails, stay silent and simply retry it correctly — the user should not be told that something went wrong behind the scenes.',
     parameters: {
       type: "object",
       properties: {
@@ -374,13 +376,20 @@ export class ChatCompletionsHandler
 
     const chatCompletionMessages = this.mergeToolUseMessages(messages);
 
+    // Render "now" in the contact's local time (inferred from their phone's
+    // country calling code) so the agent reasons about the user's clock, not
+    // the server's. Falls back to UTC when the timezone can't be inferred.
+    const contactAddress = this.context.conversation.contact_address;
+    const userTimezone = getTimezoneFromPhone(contactAddress);
+    const now = userTimezone ? dayjs().tz(userTimezone) : dayjs().utc();
+
     const context = {
-      now: dayjs().format('YYYY-MM-DD HH:mm z'),
+      // `Z` (UTC offset, e.g. +03:00) rather than `z` — the timezone-name
+      // token isn't supported by this dayjs build and would render literally.
+      now: now.format("YYYY-MM-DD HH:mm Z"),
       user: {
         name: this.context.contact?.name,
-        phone: this.context.conversation.contact_address
-          ? "+" + this.context.conversation.contact_address
-          : undefined,
+        phone: contactAddress ? "+" + contactAddress : undefined,
         email: this.context.contact?.email ?? undefined,
       },
     };
@@ -421,9 +430,7 @@ export class ChatCompletionsHandler
       },
     }));
 
-    if (MULTI_MESSAGE_RESPONSE) {
-      chatCompletionTools.push(RESPOND_TOOL);
-    }
+    chatCompletionTools.push(RESPOND_TOOL);
 
     return Promise.resolve({
       messages: chatCompletionMessages,
@@ -553,7 +560,7 @@ export class ChatCompletionsHandler
           messages: request.messages,
           // TOOLS
           tools: request.tools.length ? request.tools : undefined,
-          tool_choice: MULTI_MESSAGE_RESPONSE ? "required" : undefined,
+          tool_choice: "auto",
           parallel_tool_calls: request.tools.length ? true : undefined,
           // THINKING
           // ts-expect-error
@@ -620,6 +627,25 @@ export class ChatCompletionsHandler
     return {
       finish_reason: response.choices[0].finish_reason,
       message: response.choices[0].message,
+    };
+  }
+
+  private toOutgoingText(text: string): MessageInsert {
+    const { agent, conversation } = this.context;
+
+    return {
+      organization_id: conversation.organization_id,
+      service: conversation.service,
+      organization_address: conversation.organization_address,
+      contact_address: conversation.contact_address,
+      direction: "outgoing",
+      agent_id: agent.id,
+      content: {
+        version: "1",
+        type: "text",
+        kind: "text",
+        text,
+      },
     };
   }
 
@@ -704,21 +730,36 @@ export class ChatCompletionsHandler
     const { agent, conversation } = this.context;
 
     if (finish_reason === "tool_calls" && message.tool_calls?.length) {
-      // Check for the virtual respond tool call
-      const respondCall = message.tool_calls.find(
+      const messages: MessageInsert[] = [];
+
+      // 1. Narration the model emitted alongside its tool calls is shown to the
+      //    user immediately, enabling mid-loop updates ("Let me check...").
+      if (message.content) {
+        messages.push(this.toOutgoingText(message.content));
+      }
+
+      // 2. The virtual `respond` tool is a user-facing message, not a terminal
+      //    action: emit its messages but keep processing real tool calls so the
+      //    agent can both reply and continue working in the same turn.
+      const respondCalls = message.tool_calls.filter(
         (tc) =>
           tc.type === "function" && tc.function.name === RESPOND_FUNCTION_NAME,
       );
 
-      if (respondCall) {
-        const messages = await this.processRespondCall(respondCall);
-        return { messages };
+      for (const respondCall of respondCalls) {
+        messages.push(...(await this.processRespondCall(respondCall)));
       }
 
-      // Regular tool calls — existing logic
+      // 3. Real (non-respond) tool calls drive the agent loop's continuation.
+      const realCalls = message.tool_calls.filter(
+        (tc) =>
+          !(tc.type === "function" &&
+            tc.function.name === RESPOND_FUNCTION_NAME),
+      );
+
       const taskId = crypto.randomUUID();
 
-      const messages = message.tool_calls.map((toolCall): MessageInsert => {
+      messages.push(...realCalls.map((toolCall): MessageInsert => {
         let tool: ToolEventInfo & LocalToolInfo;
         let name: string;
         let text: string;
@@ -781,40 +822,17 @@ export class ChatCompletionsHandler
             text,
           },
         };
-      });
+      }));
 
-      return {
-        messages,
-      };
+      return { messages };
     }
 
     // TODO: finish reasons: length, content filter
 
     if (finish_reason === "stop" && message.content) {
-      if (MULTI_MESSAGE_RESPONSE) {
-        log.warn(
-          "Unexpected stop finish_reason with tool_choice: required. Falling back to text response.",
-        );
-      }
-
-      return {
-        messages: [
-          {
-            organization_id: conversation.organization_id,
-            service: conversation.service,
-            organization_address: conversation.organization_address,
-            contact_address: conversation.contact_address,
-            direction: "outgoing",
-            agent_id: agent.id,
-            content: {
-              version: "1",
-              type: "text",
-              kind: "text",
-              text: message.content,
-            },
-          },
-        ],
-      };
+      // With tool_choice "auto" a plain-text answer is the normal way to end a
+      // turn, so this is a first-class response path.
+      return { messages: [this.toOutgoingText(message.content)] };
     }
 
     return {

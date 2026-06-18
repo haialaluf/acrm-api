@@ -49,7 +49,7 @@ export type AgentTool = {
 const PAUSED_CONV_WINDOW = 12 * 60 * 60 * 1000; // 12 hours
 const MESSAGES_TIME_LIMIT = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MESSAGES_QUANTITY_LIMIT = 50;
-const RESPONSE_DELAY_SECS = 1; // 1 second
+const RESPONSE_DELAY_SECS = 0;
 const MEDIA_PREPROCESSING_TIMEOUT = 30 * 1000; // 30 seconds
 const MEDIA_PREPROCESSING_POLLING_INTERVAL = 5 * 1000; // 5 seconds
 
@@ -392,6 +392,45 @@ Deno.serve(async (req) => {
   // Up to this point all checks passed. We can proceed with the response.
   //---------------------------------------------------------------------------
 
+  // CLAIM THE CONVERSATION
+  //
+  // Incoming messages trigger this function concurrently (async pg_net), so two
+  // invocations can both pass the "newest message" check above. The claim is an
+  // atomic gate: only the invocation owning the newest message proceeds. A newer
+  // message can take the claim over later, and this invocation will then discard
+  // its response at the storage step below.
+
+  // Fail open: if the lock subsystem is unavailable (RPC not deployed yet, a
+  // transient DB error, etc.) proceed rather than drop the message. The worst
+  // case degrades to the pre-lock behaviour (a possible duplicate), never
+  // silence — which is strictly safer than failing closed here.
+  let claimed = true;
+
+  try {
+    const { data } = await client
+      .rpc("claim_conversation", {
+        _conversation_id: conv.id,
+        _message_id: incoming.id,
+        _message_at: incoming.created_at,
+      })
+      .throwOnError();
+
+    claimed = data !== false;
+  } catch (claimError) {
+    log.warn(
+      "claim_conversation gate failed; proceeding without the lock.",
+      claimError as Error,
+    );
+  }
+
+  if (!claimed) {
+    log.info(
+      `Conversation ${conv.id} is being processed by a newer message. Skipping response.`,
+    );
+
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   // TYPING INDICATOR
 
   const indicateTyping = async (unread?: boolean) => {
@@ -708,7 +747,7 @@ Deno.serve(async (req) => {
             );
           }
 
-          const ajv = new Ajv2020();
+          const ajv = new Ajv2020({ useDefaults: true });
           // Strip $schema since MCP SDK (via Zod) produces draft-07 schemas,
           // but Ajv is imported as the 2020-12 build and rejects unknown drafts.
           // deno-lint-ignore no-explicit-any
@@ -883,6 +922,47 @@ Deno.serve(async (req) => {
     // STORE CURRENT ITERATION MESSAGES
 
     if (response.messages?.length) {
+      // Re-assert the claim before persisting, but only on the terminal store
+      // (`!shouldContinue`). A newer incoming message may have taken the
+      // conversation over while we were waiting on the model; if so we discard
+      // this (now stale) response and let the newer message answer. We skip this
+      // on intermediate rounds: those only persist internal tool-use/result rows
+      // (harmless if stale), and the next iteration's newer-message check at the
+      // top of the loop halts us before any further user-facing output — so a
+      // re-check every round was just an extra DB round-trip per LLM step. When
+      // we do check and still own it, the call also refreshes the lock's TTL.
+      //
+      // Fail open (same rationale as the gate): if the check itself errors, store
+      // the response rather than silently dropping it.
+      if (!shouldContinue) {
+        let stillOwner = true;
+
+        try {
+          const { data } = await client
+            .rpc("claim_conversation", {
+              _conversation_id: conv.id,
+              _message_id: incoming.id,
+              _message_at: incoming.created_at,
+            })
+            .throwOnError();
+
+          stillOwner = data !== false;
+        } catch (claimError) {
+          log.warn(
+            "claim_conversation guard failed; storing response without the lock check.",
+            claimError as Error,
+          );
+        }
+
+        if (!stillOwner) {
+          log.info(
+            `Conversation ${conv.id} was taken over by a newer message. Discarding response.`,
+          );
+
+          break;
+        }
+      }
+
       log.info("Agent response", response.messages.at(-1)?.content);
 
       const output_messages = response.messages.map((message, index) => ({
@@ -893,7 +973,13 @@ Deno.serve(async (req) => {
         organization_address: conv.organization_address,
         contact_address: conv.contact_address,
         // Disambiguate by milliseconds index to ensure the insertion order.
-        timestamp: new Date(Date.now() + index).toISOString(),
+        // Anchor a second in the past: `timestamp > now()` is the DB's
+        // "scheduled for later" signal (honored by the dispatch trigger and by
+        // the UI, which hides such rows), and this runtime's clock can run a few
+        // ms ahead of Postgres. The offset keeps the timestamp safely below the
+        // DB clock — every turn includes a model round-trip, so it still lands
+        // well after the inbound message.
+        timestamp: new Date(Date.now() - 1000 + index).toISOString(),
       }));
 
       try {
