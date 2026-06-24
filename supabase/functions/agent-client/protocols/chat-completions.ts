@@ -386,7 +386,7 @@ export class ChatCompletionsHandler
     const context = {
       // `Z` (UTC offset, e.g. +03:00) rather than `z` — the timezone-name
       // token isn't supported by this dayjs build and would render literally.
-      now: now.format("YYYY-MM-DD HH:mm Z"),
+      now: now.format("ddd YYYY-MM-DD HH:mm Z"),
       user: {
         name: this.context.contact?.name,
         phone: contactAddress ? "+" + contactAddress : undefined,
